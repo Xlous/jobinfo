@@ -4,31 +4,83 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>学院就业信息查询</title>
-  <!-- Tailwind CSS（CDN，无需构建） -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Fuse.js 模糊搜索库（CDN） -->
   <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+  <script src="config.js"></script>
   <style>
-    /* 让长标题优雅换行 */
     .clamp-2 {
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
+    .highlight {
+      background: #dbeafe;
+      border-radius: 2px;
+      padding: 0 1px;
+    }
+    .modal-bg {
+      background: rgba(0,0,0,0.4);
+    }
+    .tag-input {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 9999px;
+      padding: 2px 8px 2px 10px;
+      font-size: 13px;
+      color: #2563eb;
+    }
+    .tag-input .remove {
+      cursor: pointer;
+      opacity: 0.6;
+      font-size: 16px;
+      line-height: 1;
+    }
+    .tag-input .remove:hover { opacity: 1; }
+    .stat-card { transition: transform 0.15s, box-shadow 0.15s; }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    .fade-in { animation: fadeIn 0.2s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .loading-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: #3b82f6;
+      display: inline-block; margin: 0 2px;
+      animation: bounce 1s infinite ease-in-out;
+    }
+    .loading-dot:nth-child(2) { animation-delay: 0.15s; }
+    .loading-dot:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes bounce { 0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; } 40% { transform: scale(1); opacity: 1; } }
   </style>
 </head>
 <body class="bg-slate-50 min-h-screen text-slate-800">
-  <div class="max-w-3xl mx-auto px-4 py-8">
+  <div class="max-w-4xl mx-auto px-4 py-6 sm:py-8">
 
     <!-- 头部 -->
-    <header class="text-center mb-8">
+    <header class="text-center mb-6">
       <h1 class="text-2xl sm:text-3xl font-bold text-slate-900">学院就业信息查询</h1>
       <p class="mt-2 text-sm text-slate-500">输入企业名称，快速查找相关招聘推文</p>
     </header>
 
+    <!-- 统计看板 -->
+    <div id="statsBoard" class="grid grid-cols-3 gap-3 mb-6" style="display:none;">
+      <div class="stat-card rounded-xl border border-slate-200 bg-white p-4 text-center">
+        <div class="text-2xl font-bold text-slate-900" id="statTotal">-</div>
+        <div class="text-xs text-slate-500 mt-1">招聘信息总数</div>
+      </div>
+      <div class="stat-card rounded-xl border border-slate-200 bg-white p-4 text-center">
+        <div class="text-2xl font-bold text-green-600" id="statRecent">-</div>
+        <div class="text-xs text-slate-500 mt-1">近7天新增</div>
+      </div>
+      <div class="stat-card rounded-xl border border-slate-200 bg-white p-4 text-center">
+        <div class="text-2xl font-bold text-blue-600" id="statCategories">-</div>
+        <div class="text-xs text-slate-500 mt-1">岗位类别数</div>
+      </div>
+    </div>
+
     <!-- 搜索框 -->
-    <div class="relative mb-6">
+    <div class="relative mb-4">
       <input
         id="searchInput"
         type="text"
@@ -39,10 +91,53 @@
       <svg class="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
         <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
       </svg>
+      <button id="clearSearch" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-sm hidden">清除</button>
     </div>
 
-    <!-- 分类筛选 -->
-    <div id="categoryFilter" class="flex flex-wrap gap-2 mb-6"></div>
+    <!-- 筛选栏 -->
+    <div class="flex flex-wrap items-center gap-2 mb-4">
+      <!-- 分类筛选 -->
+      <div id="categoryFilter" class="flex flex-wrap gap-2"></div>
+    </div>
+
+    <!-- 高级筛选行 -->
+    <div class="flex flex-wrap items-center gap-3 mb-4 px-1">
+      <!-- 日期范围 -->
+      <div class="flex items-center gap-1 text-sm">
+        <span class="text-slate-500">日期</span>
+        <input id="dateFrom" type="date" class="rounded-lg border border-slate-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none" />
+        <span class="text-slate-400">~</span>
+        <input id="dateTo" type="date" class="rounded-lg border border-slate-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none" />
+      </div>
+
+      <!-- 排序 -->
+      <div class="flex items-center gap-1 text-sm">
+        <span class="text-slate-500">排序</span>
+        <select id="sortSelect" class="rounded-lg border border-slate-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none">
+          <option value="date-desc">最新发布</option>
+          <option value="date-asc">最早发布</option>
+          <option value="company-asc">企业名 A→Z</option>
+        </select>
+      </div>
+
+      <!-- 导出按钮 -->
+      <button id="exportBtn" class="ml-auto flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1 text-sm text-slate-600 hover:border-blue-400 hover:text-blue-600 transition">
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        导出
+      </button>
+
+      <!-- 分享按钮 -->
+      <button id="shareBtn" class="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1 text-sm text-slate-600 hover:border-blue-400 hover:text-blue-600 transition">
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m9.632 4.026a3 3 0 10-5.468-1.684m5.468 5.368a3 3 0 11-5.468 1.684"/></svg>
+        分享
+      </button>
+
+      <!-- 管理按钮 -->
+      <button id="adminBtn" class="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1 text-sm text-slate-600 hover:border-blue-400 hover:text-blue-600 transition">
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        管理
+      </button>
+    </div>
 
     <!-- 统计信息 -->
     <div id="statusBar" class="mb-4 text-sm text-slate-500"></div>
@@ -50,60 +145,157 @@
     <!-- 结果列表 -->
     <div id="resultList" class="space-y-3"></div>
 
+    <!-- 分页 -->
+    <div id="pagination" class="flex items-center justify-center gap-2 mt-6" style="display:none;">
+      <button id="prevPage" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-600 hover:border-blue-400 transition disabled:opacity-40 disabled:cursor-not-allowed">上一页</button>
+      <span id="pageInfo" class="text-sm text-slate-500"></span>
+      <button id="nextPage" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-600 hover:border-blue-400 transition disabled:opacity-40 disabled:cursor-not-allowed">下一页</button>
+    </div>
+
+    <!-- 加载更多（移动端无限滚动备选） -->
+    <div id="loadMoreHint" class="text-center text-sm text-slate-400 mt-4" style="display:none;"></div>
+
     <!-- 页脚 -->
-    <footer class="mt-12 text-center text-xs text-slate-400">
+    <footer class="mt-10 text-center text-xs text-slate-400">
       <p id="updatedInfo"></p>
       <p class="mt-1">数据来源于学院就业信息群 · 点击卡片跳转微信推文</p>
     </footer>
   </div>
 
+  <!-- ========== 管理员登录弹窗 ========== -->
+  <div id="adminLoginModal" class="fixed inset-0 modal-bg z-50 flex items-center justify-center px-4" style="display:none;">
+    <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 fade-in">
+      <h3 class="text-lg font-bold text-slate-900 mb-4">管理员登录</h3>
+      <p class="text-sm text-slate-500 mb-4">请输入管理令牌以进入管理模式</p>
+      <input id="adminTokenInput" type="password" placeholder="管理令牌" class="w-full rounded-xl border border-slate-300 px-4 py-2.5 mb-4 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200" />
+      <div class="flex gap-3">
+        <button id="adminLoginConfirm" class="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-white font-medium hover:bg-blue-700 transition">确认</button>
+        <button id="adminLoginCancel" class="rounded-xl border border-slate-300 px-4 py-2.5 text-slate-600 hover:bg-slate-50 transition">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 管理面板弹窗 ========== -->
+  <div id="adminModal" class="fixed inset-0 modal-bg z-50 flex items-center justify-center px-4" style="display:none;">
+    <div class="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto fade-in">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white rounded-t-2xl">
+        <h3 class="text-lg font-bold text-slate-900">管理招聘信息</h3>
+        <div class="flex items-center gap-3">
+          <span id="adminModeBadge" class="text-xs rounded-full bg-green-100 text-green-700 px-2.5 py-0.5">飞书在线模式</span>
+          <button id="adminModalClose" class="text-slate-400 hover:text-slate-600">
+            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="p-6">
+        <!-- 添加/编辑表单 -->
+        <div class="mb-6">
+          <h4 class="text-sm font-semibold text-slate-700 mb-3" id="formTitle">新增招聘信息</h4>
+          <div class="space-y-3">
+            <div>
+              <label class="text-xs text-slate-500">企业名称 <span class="text-red-500">*</span></label>
+              <input id="formCompany" type="text" placeholder="如：国家电网有限公司" class="w-full rounded-lg border border-slate-300 px-3 py-2 mt-1 text-sm focus:border-blue-500 focus:outline-none" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-500">推文标题</label>
+              <input id="formTitle2" type="text" placeholder="如：国家电网2027年招聘公告" class="w-full rounded-lg border border-slate-300 px-3 py-2 mt-1 text-sm focus:border-blue-500 focus:outline-none" />
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs text-slate-500">发布日期</label>
+                <input id="formDate" type="date" class="w-full rounded-lg border border-slate-300 px-3 py-2 mt-1 text-sm focus:border-blue-500 focus:outline-none" />
+              </div>
+              <div>
+                <label class="text-xs text-slate-500">推文链接 <span class="text-red-500">*</span></label>
+                <input id="formUrl" type="url" placeholder="https://mp.weixin.qq.com/s/..." class="w-full rounded-lg border border-slate-300 px-3 py-2 mt-1 text-sm focus:border-blue-500 focus:outline-none" />
+              </div>
+            </div>
+            <div>
+              <label class="text-xs text-slate-500">岗位类别（可多选，回车添加）</label>
+              <div id="formCategoryTags" class="flex flex-wrap gap-1.5 mt-1 mb-1.5"></div>
+              <input id="formCategoryInput" type="text" placeholder="输入类别后按回车添加，如：国企招聘" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+            </div>
+            <button id="formSubmit" class="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-white font-medium text-sm hover:bg-blue-700 transition">添加</button>
+          </div>
+        </div>
+
+        <!-- 管理列表 -->
+        <div>
+          <h4 class="text-sm font-semibold text-slate-700 mb-3">已有记录（可编辑/删除）</h4>
+          <div id="adminList" class="space-y-2 max-h-64 overflow-y-auto"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== Toast 提示 ========== -->
+  <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl bg-slate-800 text-white px-5 py-3 text-sm shadow-lg transition-opacity duration-300 opacity-0 pointer-events-none"></div>
+
   <script>
+    // ========== 全局状态 ==========
     let fuse = null;
     let allJobs = [];
+    let filteredJobs = [];
     let activeCategory = "全部";
+    let currentPage = 1;
+    let totalPages = 1;
+    let isAdmin = false;
+    let editingId = null;
+    let formCategories = [];
+    let isApiMode = false;
+    let currentSort = "date-desc";
+
+    const PAGE_SIZE = (typeof CONFIG !== "undefined" && CONFIG.PAGE_SIZE) || 20;
+    const SEARCH_DEBOUNCE = (typeof CONFIG !== "undefined" && CONFIG.SEARCH_DEBOUNCE) || 150;
+    const API_BASE = (typeof CONFIG !== "undefined" && CONFIG.API_BASE_URL) || "";
+    const ADMIN_TOKEN = (typeof CONFIG !== "undefined" && CONFIG.ADMIN_TOKEN) || "";
 
     const searchInput = document.getElementById("searchInput");
     const resultList = document.getElementById("resultList");
     const statusBar = document.getElementById("statusBar");
     const categoryFilter = document.getElementById("categoryFilter");
     const updatedInfo = document.getElementById("updatedInfo");
+    const statsBoard = document.getElementById("statsBoard");
+    const clearSearchBtn = document.getElementById("clearSearch");
+    const dateFromEl = document.getElementById("dateFrom");
+    const dateToEl = document.getElementById("dateTo");
+    const sortSelect = document.getElementById("sortSelect");
+    const pagination = document.getElementById("pagination");
+    const prevPageBtn = document.getElementById("prevPage");
+    const nextPageBtn = document.getElementById("nextPage");
+    const pageInfo = document.getElementById("pageInfo");
+    const loadMoreHint = document.getElementById("loadMoreHint");
 
-    // 加载数据
-    async function loadData() {
-      try {
-        const res = await fetch("data.json?_t=" + Date.now()); // 加时间戳避免缓存
-        if (!res.ok) throw new Error("数据加载失败：" + res.status);
-        const data = await res.json();
-        allJobs = data.jobs || [];
-
-        if (data.updatedAt) {
-          updatedInfo.textContent = "最近更新：" + data.updatedAt;
-        }
-
-        // 初始化 Fuse.js：按企业名和标题模糊匹配
-        fuse = new Fuse(allJobs, {
-          keys: [
-            { name: "company", weight: 0.7 },
-            { name: "title", weight: 0.3 }
-          ],
-          threshold: 0.4,   // 越小越严格
-          ignoreLocation: true,
-          minMatchCharLength: 1
-        });
-
-        renderCategories();
-        render("");
-      } catch (err) {
-        resultList.innerHTML =
-          '<div class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">' +
-          "数据加载失败：" + err.message +
-          "<br/>提示：请通过本地服务器或部署后访问，直接双击打开可能因浏览器限制无法读取 data.json。" +
-          "</div>";
-      }
+    // ========== Toast ==========
+    let toastTimer = null;
+    function toast(msg, duration = 2500) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.style.opacity = "1";
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { el.style.opacity = "0"; }, duration);
     }
 
-    // 取一条记录的所有标签，兼容两种写法：
-    // 字符串 "国企招聘"，或数组 ["国企招聘", "技术岗"]
+    // ========== HTML 转义 ==========
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    // ========== 关键词高亮 ==========
+    function highlightText(text, query) {
+      if (!query || !text) return escapeHtml(text);
+      const escaped = escapeHtml(text);
+      const queryEscaped = escapeHtml(query);
+      // 简单的全局替换，忽略大小写
+      const reg = new RegExp("(" + queryEscaped.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "gi");
+      return escaped.replace(reg, '<span class="highlight">$1</span>');
+    }
+
+    // ========== 分类工具 ==========
     function getCategories(job) {
       if (Array.isArray(job.category)) {
         return job.category.filter(Boolean);
@@ -114,62 +306,192 @@
       return [];
     }
 
-    // 渲染分类按钮
+    // ========== 数据加载 ==========
+    async function loadData() {
+      resultList.innerHTML = '<div class="text-center text-slate-400 py-8"><span class="loading-dot"></span><span class="loading-dot"></span><span class="loading-dot"></span> 加载中...</div>';
+
+      // 尝试从 API 加载
+      if (API_BASE) {
+        try {
+          const res = await fetch(`${API_BASE}/api/jobs`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success) {
+              allJobs = data.data || [];
+              isApiMode = true;
+              if (data.updatedAt) {
+                updatedInfo.textContent = "最近更新：" + data.updatedAt;
+              }
+              initFuse();
+              renderCategories();
+              renderStats();
+              render();
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn("API 加载失败，回退到 data.json:", e.message);
+        }
+      }
+
+      // 回退到 data.json
+      try {
+        const res = await fetch("data.json?_t=" + Date.now());
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        allJobs = data.jobs || [];
+        isApiMode = false;
+        if (data.updatedAt) {
+          updatedInfo.textContent = "最近更新：" + data.updatedAt;
+        }
+        initFuse();
+        renderCategories();
+        renderStats();
+        render();
+      } catch (err) {
+        resultList.innerHTML =
+          '<div class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">' +
+          "数据加载失败：" + escapeHtml(err.message) +
+          "<br/>提示：请通过本地服务器或部署后访问。" +
+          "</div>";
+      }
+    }
+
+    function initFuse() {
+      fuse = new Fuse(allJobs, {
+        keys: [
+          { name: "company", weight: 0.7 },
+          { name: "title", weight: 0.3 }
+        ],
+        threshold: 0.4,
+        ignoreLocation: true,
+        minMatchCharLength: 1,
+        includeMatches: true,
+      });
+    }
+
+    // ========== 统计看板 ==========
+    function renderStats() {
+      if (allJobs.length === 0) {
+        statsBoard.style.display = "none";
+        return;
+      }
+      statsBoard.style.display = "grid";
+
+      const categorySet = new Set(allJobs.flatMap(getCategories));
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const recentCount = allJobs.filter(
+        (j) => j.date && new Date(j.date) >= sevenDaysAgo
+      ).length;
+
+      document.getElementById("statTotal").textContent = allJobs.length;
+      document.getElementById("statRecent").textContent = recentCount;
+      document.getElementById("statCategories").textContent = categorySet.size;
+    }
+
+    // ========== 分类按钮 ==========
     function renderCategories() {
       const cats = ["全部", ...new Set(allJobs.flatMap(getCategories))];
       categoryFilter.innerHTML = cats.map(cat => {
         const active = cat === activeCategory;
-        return `<button data-cat="${cat}" class="cat-btn rounded-full px-4 py-1.5 text-sm border transition
+        return `<button data-cat="${escapeHtml(cat)}" class="cat-btn rounded-full px-4 py-1.5 text-sm border transition
           ${active
             ? "bg-blue-600 text-white border-blue-600"
             : "bg-white text-slate-600 border-slate-300 hover:border-blue-400"}">
-          ${cat}</button>`;
+          ${escapeHtml(cat)}</button>`;
       }).join("");
 
       categoryFilter.querySelectorAll(".cat-btn").forEach(btn => {
         btn.addEventListener("click", () => {
           activeCategory = btn.dataset.cat;
+          currentPage = 1;
           renderCategories();
-          render(searchInput.value.trim());
+          render();
         });
       });
     }
 
-    // 渲染结果
-    function render(query) {
+    // ========== 筛选+排序+分页渲染 ==========
+    function render() {
+      const query = searchInput.value.trim();
       let list;
 
-      if (query) {
+      // 搜索
+      if (query && fuse) {
         list = fuse.search(query).map(r => r.item);
       } else {
-        // 无搜索词时按日期倒序展示全部
-        list = [...allJobs].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+        list = [...allJobs];
       }
 
-      // 分类筛选：记录含有该标签即命中（支持多标签）
+      // 分类筛选
       if (activeCategory !== "全部") {
         list = list.filter(j => getCategories(j).includes(activeCategory));
       }
 
-      statusBar.textContent = query
-        ? `找到 ${list.length} 条与“${query}”相关的结果`
-        : `共 ${list.length} 条招聘信息`;
+      // 日期范围筛选（设定了范围时，无日期的记录被排除）
+      const dateFrom = dateFromEl.value;
+      const dateTo = dateToEl.value;
+      if (dateFrom || dateTo) {
+        list = list.filter(j => j.date);
+        if (dateFrom) {
+          list = list.filter(j => j.date >= dateFrom);
+        }
+        if (dateTo) {
+          list = list.filter(j => j.date <= dateTo);
+        }
+      }
 
+      // 排序
+      currentSort = sortSelect.value;
+      switch (currentSort) {
+        case "date-desc":
+          list.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+          break;
+        case "date-asc":
+          list.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+          break;
+        case "company-asc":
+          list.sort((a, b) => (a.company || "").localeCompare(b.company || ""));
+          break;
+      }
+
+      filteredJobs = list;
+
+      // 分页
+      totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+      if (currentPage > totalPages) currentPage = totalPages;
+      const startIdx = (currentPage - 1) * PAGE_SIZE;
+      const pageList = list.slice(startIdx, startIdx + PAGE_SIZE);
+
+      // 状态栏
+      let statusText;
+      if (query) {
+        statusText = `找到 ${list.length} 条与"${query}"相关的结果`;
+      } else {
+        statusText = `共 ${list.length} 条招聘信息`;
+      }
+      if (list.length !== allJobs.length) {
+        statusText += `（总 ${allJobs.length} 条）`;
+      }
+      statusBar.textContent = statusText;
+
+      // 渲染列表
       if (list.length === 0) {
         resultList.innerHTML =
           '<div class="rounded-xl border border-slate-200 bg-white p-6 text-center text-slate-400">' +
-          "没有找到相关企业，换个关键词试试～" +
-          "</div>";
+          "没有找到相关企业，换个关键词试试～</div>";
+        pagination.style.display = "none";
         return;
       }
 
-      resultList.innerHTML = list.map(job => `
-        <a href="${job.url}" target="_blank" rel="noopener noreferrer"
-           class="block rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-400 hover:shadow-md">
+      resultList.innerHTML = pageList.map((job, idx) => `
+        <a href="${escapeHtml(job.url)}" target="_blank" rel="noopener noreferrer"
+           class="fade-in block rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-400 hover:shadow-md">
           <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0">
-              <h3 class="font-semibold text-slate-900 truncate">${escapeHtml(job.company)}</h3>
-              <p class="mt-1 text-sm text-slate-600 clamp-2">${escapeHtml(job.title || "")}</p>
+            <div class="min-w-0 flex-1">
+              <h3 class="font-semibold text-slate-900 truncate">${highlightText(job.company, query)}</h3>
+              <p class="mt-1 text-sm text-slate-600 clamp-2">${highlightText(job.title || "", query)}</p>
             </div>
             <div class="flex flex-wrap gap-1 justify-end shrink-0">
               ${getCategories(job).map(cat => `<span class="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs text-blue-600">${escapeHtml(cat)}</span>`).join("")}
@@ -181,24 +503,371 @@
           </div>
         </a>
       `).join("");
+
+      // 分页控件
+      renderPagination();
     }
 
-    // 防止 XSS
-    function escapeHtml(str) {
-      return String(str)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
+    function renderPagination() {
+      if (totalPages <= 1) {
+        pagination.style.display = "none";
+        loadMoreHint.style.display = "none";
+        return;
+      }
+
+      pagination.style.display = "flex";
+      prevPageBtn.disabled = currentPage <= 1;
+      nextPageBtn.disabled = currentPage >= totalPages;
+      pageInfo.textContent = `第 ${currentPage} / ${totalPages} 页`;
     }
 
-    // 输入即搜索（防抖）
-    let timer = null;
+    // ========== 事件绑定 ==========
+
+    // 搜索（防抖）
+    let searchTimer = null;
     searchInput.addEventListener("input", () => {
-      clearTimeout(timer);
-      timer = setTimeout(() => render(searchInput.value.trim()), 150);
+      clearSearchBtn.classList.toggle("hidden", !searchInput.value);
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        currentPage = 1;
+        render();
+      }, SEARCH_DEBOUNCE);
     });
 
+    clearSearchBtn.addEventListener("click", () => {
+      searchInput.value = "";
+      clearSearchBtn.classList.add("hidden");
+      currentPage = 1;
+      render();
+    });
+
+    dateFromEl.addEventListener("change", () => { currentPage = 1; render(); });
+    dateToEl.addEventListener("change", () => { currentPage = 1; render(); });
+    sortSelect.addEventListener("change", () => { render(); });
+
+    prevPageBtn.addEventListener("click", () => {
+      if (currentPage > 1) { currentPage--; render(); window.scrollTo(0, 0); }
+    });
+    nextPageBtn.addEventListener("click", () => {
+      if (currentPage < totalPages) { currentPage++; render(); window.scrollTo(0, 0); }
+    });
+
+    // ========== 导出 ==========
+    document.getElementById("exportBtn").addEventListener("click", () => {
+      if (filteredJobs.length === 0) {
+        toast("没有可导出的数据");
+        return;
+      }
+      // 生成 CSV（带 BOM 以支持 Excel 中文）
+      const headers = ["企业名称", "推文标题", "发布日期", "岗位类别", "推文链接"];
+      const rows = filteredJobs.map(j => [
+        j.company || "",
+        j.title || "",
+        j.date || "",
+        Array.isArray(j.category) ? j.category.join(", ") : (j.category || ""),
+        j.url || ""
+      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+
+      const csv = "\uFEFF" + headers.join(",") + "\n" + rows.join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `就业信息_${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast(`已导出 ${filteredJobs.length} 条记录`);
+    });
+
+    // ========== 分享 ==========
+    document.getElementById("shareBtn").addEventListener("click", async () => {
+      const query = searchInput.value.trim();
+      const cat = activeCategory !== "全部" ? activeCategory : "";
+      const params = new URLSearchParams();
+      if (query) params.set("q", query);
+      if (cat) params.set("cat", cat);
+      const shareUrl = window.location.origin + window.location.pathname + (params.toString() ? "?" + params : "");
+
+      try {
+        if (navigator.share) {
+          await navigator.share({
+            title: "学院就业信息查询",
+            text: query ? `搜索"${query}"的招聘信息` : "学院就业信息查询",
+            url: shareUrl
+          });
+        } else {
+          await navigator.clipboard.writeText(shareUrl);
+          toast("链接已复制到剪贴板");
+        }
+      } catch (e) {
+        try {
+          await navigator.clipboard.writeText(shareUrl);
+          toast("链接已复制到剪贴板");
+        } catch (e2) {
+          toast("分享失败，请手动复制网址");
+        }
+      }
+    });
+
+    // ========== 管理 ==========
+
+    // 从 URL 读取初始筛选
+    function readUrlParams() {
+      const params = new URLSearchParams(window.location.search);
+      const q = params.get("q");
+      const cat = params.get("cat");
+      if (q) {
+        searchInput.value = q;
+        clearSearchBtn.classList.remove("hidden");
+      }
+      if (cat) activeCategory = cat;
+    }
+
+    // 管理员登录
+    document.getElementById("adminBtn").addEventListener("click", () => {
+      if (isAdmin) {
+        openAdminModal();
+      } else {
+        document.getElementById("adminLoginModal").style.display = "flex";
+        document.getElementById("adminTokenInput").focus();
+      }
+    });
+
+    document.getElementById("adminLoginConfirm").addEventListener("click", () => {
+      const token = document.getElementById("adminTokenInput").value;
+      // 未配置 ADMIN_TOKEN 时（本地模式），允许直接登录
+      if (!ADMIN_TOKEN) {
+        isAdmin = true;
+        window._adminToken = token;
+        document.getElementById("adminLoginModal").style.display = "none";
+        document.getElementById("adminTokenInput").value = "";
+        openAdminModal();
+        return;
+      }
+      // 已配置 ADMIN_TOKEN 时，必须输入且匹配
+      if (!token) {
+        toast("请输入管理令牌");
+        return;
+      }
+      if (token !== ADMIN_TOKEN) {
+        toast("令牌错误");
+        return;
+      }
+      isAdmin = true;
+      window._adminToken = token;
+      document.getElementById("adminLoginModal").style.display = "none";
+      document.getElementById("adminTokenInput").value = "";
+      openAdminModal();
+    });
+
+    document.getElementById("adminLoginCancel").addEventListener("click", () => {
+      document.getElementById("adminLoginModal").style.display = "none";
+      document.getElementById("adminTokenInput").value = "";
+    });
+
+    document.getElementById("adminTokenInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") document.getElementById("adminLoginConfirm").click();
+    });
+
+    function openAdminModal() {
+      document.getElementById("adminModal").style.display = "flex";
+      document.getElementById("adminModeBadge").textContent = isApiMode ? "飞书在线模式" : "本地模式（仅预览）";
+      document.getElementById("adminModeBadge").className = isApiMode
+        ? "text-xs rounded-full bg-green-100 text-green-700 px-2.5 py-0.5"
+        : "text-xs rounded-full bg-amber-100 text-amber-700 px-2.5 py-0.5";
+      resetForm();
+      renderAdminList();
+    }
+
+    document.getElementById("adminModalClose").addEventListener("click", () => {
+      document.getElementById("adminModal").style.display = "none";
+    });
+
+    // 点击遮罩关闭
+    document.getElementById("adminLoginModal").addEventListener("click", (e) => {
+      if (e.target === e.currentTarget) e.currentTarget.style.display = "none";
+    });
+    document.getElementById("adminModal").addEventListener("click", (e) => {
+      if (e.target === e.currentTarget) e.currentTarget.style.display = "none";
+    });
+
+    // ========== 表单逻辑 ==========
+
+    function resetForm() {
+      editingId = null;
+      formCategories = [];
+      document.getElementById("formTitle").textContent = "新增招聘信息";
+      document.getElementById("formCompany").value = "";
+      document.getElementById("formTitle2").value = "";
+      document.getElementById("formDate").value = "";
+      document.getElementById("formUrl").value = "";
+      document.getElementById("formCategoryInput").value = "";
+      document.getElementById("formSubmit").textContent = "添加";
+      renderFormCategories();
+    }
+
+    function renderFormCategories() {
+      const container = document.getElementById("formCategoryTags");
+      container.innerHTML = formCategories.map((cat, i) => `
+        <span class="tag-input">
+          ${escapeHtml(cat)}
+          <span class="remove" data-idx="${i}">&times;</span>
+        </span>
+      `).join("");
+      container.querySelectorAll(".remove").forEach(el => {
+        el.addEventListener("click", () => {
+          formCategories.splice(parseInt(el.dataset.idx), 1);
+          renderFormCategories();
+        });
+      });
+    }
+
+    document.getElementById("formCategoryInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === ",") {
+        e.preventDefault();
+        const val = e.target.value.trim();
+        if (val && !formCategories.includes(val)) {
+          formCategories.push(val);
+          renderFormCategories();
+        }
+        e.target.value = "";
+      }
+    });
+
+    document.getElementById("formSubmit").addEventListener("click", async () => {
+      const company = document.getElementById("formCompany").value.trim();
+      const title = document.getElementById("formTitle2").value.trim();
+      const date = document.getElementById("formDate").value;
+      const url = document.getElementById("formUrl").value.trim();
+
+      if (!company) { toast("请输入企业名称"); return; }
+      if (!url) { toast("请输入推文链接"); return; }
+
+      const job = {
+        company, title, date, url,
+        category: formCategories.length > 0 ? formCategories : ""
+      };
+
+      const btn = document.getElementById("formSubmit");
+      btn.disabled = true;
+      btn.textContent = "提交中...";
+
+      try {
+        if (isApiMode && API_BASE) {
+          const method = editingId ? "PUT" : "POST";
+          const path = editingId ? `${API_BASE}/api/jobs/${editingId}` : `${API_BASE}/api/jobs`;
+          const res = await fetch(path, {
+            method,
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + (window._adminToken || ADMIN_TOKEN),
+            },
+            body: JSON.stringify(job),
+          });
+          const data = await res.json();
+          if (!data.success) throw new Error(data.error || "操作失败");
+
+          toast(editingId ? "已修改" : "已添加");
+        } else {
+          // 本地模式：直接更新内存数据
+          if (editingId) {
+            const idx = allJobs.findIndex(j => j.id === editingId);
+            if (idx >= 0) allJobs[idx] = { ...allJobs[idx], ...job };
+          } else {
+            allJobs.unshift({ id: "local_" + Date.now(), ...job });
+          }
+          toast(editingId ? "已修改（仅本地）" : "已添加（仅本地）");
+        }
+
+        resetForm();
+        if (isApiMode && API_BASE) {
+          // API 模式：重新从飞书拉取最新数据
+          await loadData();
+        } else {
+          // 本地模式：直接用内存数据重新渲染（避免 fetch 覆盖）
+          initFuse();
+          renderCategories();
+          renderStats();
+          render();
+        }
+        renderAdminList();
+      } catch (err) {
+        toast("操作失败: " + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = editingId ? "修改" : "添加";
+      }
+    });
+
+    // ========== 管理列表 ==========
+    function renderAdminList() {
+      const list = document.getElementById("adminList");
+      if (allJobs.length === 0) {
+        list.innerHTML = '<div class="text-center text-sm text-slate-400 py-4">暂无记录</div>';
+        return;
+      }
+      list.innerHTML = allJobs.map(job => `
+        <div class="flex items-center justify-between gap-2 rounded-lg border border-slate-200 p-3">
+          <div class="min-w-0 flex-1">
+            <div class="text-sm font-medium text-slate-900 truncate">${escapeHtml(job.company)}</div>
+            <div class="text-xs text-slate-500 truncate">${escapeHtml(job.title || "")} · ${escapeHtml(job.date || "无日期")}</div>
+          </div>
+          <div class="flex gap-1 shrink-0">
+            <button class="edit-btn rounded-md bg-blue-50 px-2.5 py-1 text-xs text-blue-600 hover:bg-blue-100" data-id="${escapeHtml(job.id)}">编辑</button>
+            <button class="del-btn rounded-md bg-red-50 px-2.5 py-1 text-xs text-red-600 hover:bg-red-100" data-id="${escapeHtml(job.id)}">删除</button>
+          </div>
+        </div>
+      `).join("");
+
+      list.querySelectorAll(".edit-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const job = allJobs.find(j => j.id === btn.dataset.id);
+          if (!job) return;
+          editingId = job.id;
+          document.getElementById("formTitle").textContent = "编辑招聘信息";
+          document.getElementById("formCompany").value = job.company || "";
+          document.getElementById("formTitle2").value = job.title || "";
+          document.getElementById("formDate").value = job.date || "";
+          document.getElementById("formUrl").value = job.url || "";
+          formCategories = getCategories(job);
+          renderFormCategories();
+          document.getElementById("formSubmit").textContent = "修改";
+        });
+      });
+
+      list.querySelectorAll(".del-btn").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          if (!confirm("确定删除此条记录？")) return;
+          try {
+            if (isApiMode && API_BASE) {
+              const res = await fetch(`${API_BASE}/api/jobs/${btn.dataset.id}`, {
+                method: "DELETE",
+                headers: { "Authorization": "Bearer " + (window._adminToken || ADMIN_TOKEN) },
+              });
+              const data = await res.json();
+              if (!data.success) throw new Error(data.error || "删除失败");
+            } else {
+              allJobs = allJobs.filter(j => j.id !== btn.dataset.id);
+            }
+            toast("已删除");
+            if (isApiMode && API_BASE) {
+              await loadData();
+            } else {
+              initFuse();
+              renderCategories();
+              renderStats();
+              render();
+            }
+            renderAdminList();
+          } catch (err) {
+            toast("删除失败: " + err.message);
+          }
+        });
+      });
+    }
+
+    // ========== 初始化 ==========
+    readUrlParams();
     loadData();
   </script>
 </body>
