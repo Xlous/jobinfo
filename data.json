@@ -1,0 +1,26 @@
+{
+  "updatedAt": "2026-09-22",
+  "jobs": [
+    {
+      "company": "示例科技有限公司",
+      "title": "示例科技2027届校园招聘正式启动",
+      "date": "2026-09-20",
+      "category": "校园招聘",
+      "url": "https://mp.weixin.qq.com/s/71crpmllgS8djowp1leyCQ"
+    },
+    {
+      "company": "国家电网有限公司",
+      "title": "国家电网2027年高校毕业生招聘公告（第一批）",
+      "date": "2026-09-18",
+      "category": ["国企招聘", "校园招聘", "技术岗"],
+      "url": "https://mp.weixin.qq.com/s/71crpmllgS8djowp1leyCQ"
+    },
+    {
+      "company": "中国华能集团",
+      "title": "华能集团2027届秋季校园招聘",
+      "date": "2026-09-15",
+      "category": "国企招聘",
+      "url": "https://mp.weixin.qq.com/s/71crpmllgS8djowp1leyCQ"
+    }
+  ]
+}
