@@ -1,0 +1,9 @@
+name = "feishu-jobs-api"
+main = "src/index.js"
+compatibility_date = "2026-09-22"
+
+[vars]
+# FEISHU_APP_ID = "cli_aa3821d58bf89d2b"
+# FEISHU_APP_TOKEN = "Fbggbfu6AaceKhsE49FcuMKVnzb"
+# FEISHU_TABLE_ID = "tblcxb5OElR7LjSd"
+
